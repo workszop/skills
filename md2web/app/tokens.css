@@ -1,0 +1,192 @@
+/* ==========================================================================
+   md2web — Design tokens (brand-agnostic)
+   Single source of truth for colour, type, spacing, radius, shadow, motion.
+   UI chrome (buttons, wordmark, focus rings) keys off --brand; article
+   content keys off --accent (see md-styles.css), chosen in the Format panel.
+   ========================================================================== */
+
+/* ---- WEB FONTS ----------------------------------------------------------- */
+/* Raleway: wordmark + default article font. Inter: UI chrome.
+   Geist Mono: code and metadata. All from Google Fonts. */
+@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* ====================================================================== */
+  /*  COLOR — BRAND (interface chrome)                                      */
+  /* ====================================================================== */
+  --brand:            #2563EB;   /* Buttons, wordmark, links in chrome     */
+  --brand-deep:       color-mix(in srgb, var(--brand) 78%, #000);   /* hover / pressed */
+  --brand-fg:         #FFFFFF;   /* Text on brand                           */
+  --brand-text:       var(--brand);   /* brand used as text/outline on the page; lightened on dark */
+
+  /* ====================================================================== */
+  /*  COLOR — ACCENT PALETTE (Format panel swatches, code tokens)           */
+  /* ====================================================================== */
+  --blue:             #2563EB;
+  --indigo:           #4F46E5;
+  --violet:           #7C3AED;
+  --pink:             #DB2777;
+  --emerald:          #059669;
+  --amber:            #D97706;
+  --ink:              #0F172A;
+
+  /* Fixed code-token hues (hljs); dark theme overrides them in md-styles.css */
+  --code-violet:      var(--violet);
+  --code-indigo:      var(--indigo);
+  --code-pink:        var(--pink);
+  --code-amber:       var(--amber);
+  --code-green:       var(--status-success);
+
+  /* ====================================================================== */
+  /*  COLOR — NEUTRALS                                                      */
+  /* ====================================================================== */
+  --near-black:       #111111;
+  --white:            #FFFFFF;
+
+  /* ====================================================================== */
+  /*  COLOR — SEMANTIC                                                      */
+  /* ====================================================================== */
+  /* Aliases of the themeable page tokens (md-styles.css) so .type-* classes
+     follow light / sepia / dark instead of leaking fixed greys. */
+  --fg-1:             var(--page-fg-1, #111111);   /* Primary text */
+  --fg-2:             var(--page-fg-2, #3A3A42);   /* Secondary text */
+  --fg-3:             var(--page-fg-3, #6B6B76);   /* Tertiary / metadata */
+
+
+  --border-focus:     var(--brand);
+
+  --status-success:   #059669;
+  --status-error:     #DC2626;
+
+  /* ====================================================================== */
+  /*  TYPOGRAPHY — FAMILIES                                                 */
+  /* ====================================================================== */
+  --font-display:     "Raleway", "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans:        "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:        "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ====================================================================== */
+  /*  TYPOGRAPHY — SCALE                                                    */
+  /* ====================================================================== */
+  --fs-display:       72px;
+  --fs-h1:            56px;
+  --fs-h2:            28px;
+  --fs-h3:            20px;
+  --fs-body-lg:       18px;
+  --fs-body:          14px;
+  --fs-caption:       12px;
+  --fs-micro:         11px;
+
+  --lh-display:       1.05;
+  --lh-h1:            1.1;
+  --lh-h2:            1.25;
+  --lh-h3:            1.4;
+  --lh-body:          1.65;
+
+  --tracking-display: -0.02em;
+  --tracking-h1:      -0.01em;
+  --tracking-caps:    0.08em;
+
+  --fw-regular:       400;
+  --fw-medium:        500;
+  --fw-bold:          700;
+
+  /* ====================================================================== */
+  /*  SPACING — 8px base, with 4px halfsteps                                */
+  /* ====================================================================== */
+  --space-1:          4px;
+  --space-2:          8px;
+  --space-3:          12px;
+  --space-4:          16px;
+  --space-5:          24px;
+  --space-6:          32px;
+  --space-7:          40px;
+  --space-8:          48px;
+  --space-9:          64px;
+  --space-11:         128px;
+
+  /* ====================================================================== */
+  /*  RADIUS                                                                */
+  /* ====================================================================== */
+  --radius-xs:        4px;
+  --radius-sm:        6px;
+  --radius-md:        10px;
+  --radius-lg:        16px;
+  --radius-pill:      999px;
+
+  /* ====================================================================== */
+  /*  SHADOWS — soft, never heavy. Brand-tinted at brand-adjacent layers.   */
+  /* ====================================================================== */
+  --shadow-xs:        0 1px 2px rgba(17, 17, 17, 0.04);
+  --shadow-md:        0 8px 24px rgba(17, 17, 17, 0.08);
+  --shadow-lg:        0 20px 48px rgba(17, 17, 17, 0.10);
+  --shadow-brand-soft:0 6px 18px color-mix(in srgb, var(--brand) 10%, transparent);
+  --inner-hairline:   inset 0 0 0 1px rgba(17, 17, 17, 0.06);
+
+  /* ====================================================================== */
+  /*  MOTION                                                                */
+  /* ====================================================================== */
+  --ease-standard:    cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-out-soft:    cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1:            120ms;
+  --dur-2:            200ms;
+  --dur-3:            320ms;
+}
+
+
+/* ==========================================================================
+   SEMANTIC TYPE STYLES
+   Use the class OR copy the rule. Not auto-applied to bare elements.
+   ========================================================================== */
+
+.type-h2,
+.type-body,
+.type-body-lg,
+.type-caption,
+.type-eyebrow,
+.type-mono {
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.type-h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-medium);
+}
+
+.type-body-lg {
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-regular);
+}
+
+.type-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-regular);
+  color: var(--fg-2);
+}
+
+.type-caption {
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  color: var(--fg-3);
+}
+
+.type-eyebrow {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--brand-text);
+}
+
+.type-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  color: var(--fg-2);
+}

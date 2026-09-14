@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>md2web</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="md-styles.css" />
+  <!-- Panel font options (Poppins / Lato); Raleway, Inter and Geist Mono come from tokens.css -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@400;500;700&display=swap" />
+  <!-- No highlight.js theme stylesheet: every .hljs-* token is styled in md-styles.css
+       from design tokens, so code blocks follow the accent/theme and need no extra request. -->
+
+  <!-- Libraries are plain UMD scripts (no bundler/ES-module server needed), loaded from CDN
+       with Subresource Integrity. Note: an internet connection is required on first load. -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"
+          integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@18.0.9/lib/marked.umd.js"
+          integrity="sha384-kyb7rY2xnKgiRpRdAeNJxQ8e2SiGZy1m+FK9yME6M0eGJpg7EFaGGvf7+JSirgqE" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.4.13/dist/purify.min.js"
+          integrity="sha384-ZuC+DIACqSIZTsp+7YF57cR5Y+6qXa7YFbEKdA/EHA/R0T+41dtorqucYl71Zp+t" crossorigin="anonymous"></script>
+
+  <!-- MD2WEB_CONFIG -->
+  <!-- Apply saved formatting before first paint so there is no flash of default styling -->
+  <script>
+    (function () {
+      try {
+        var cfg = window.MD2WEB || {};
+        var saved = Object.assign({}, cfg.defaults || {}, JSON.parse(localStorage.getItem(cfg.storageKey || 'md2web-format') || '{}'));
+        var root = document.documentElement;
+        if (saved.theme === 'auto') {
+          saved.theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        ['accent', 'font', 'scale', 'leading', 'measure', 'theme'].forEach(function (key) {
+          if (saved[key]) root.setAttribute('data-md-' + key, saved[key]);
+        });
+        if (saved.accent === 'custom' && /^#[0-9a-fA-F]{6}$/.test(saved.accentCustom || '')) {
+          root.style.setProperty('--accent', saved.accentCustom);
+        }
+      } catch (e) { /* corrupted settings — defaults apply */ }
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- ── TOP BAR ──────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <span class="topbar__logo">
+      <span class="wordmark">md2web</span>
+    </span>
+    <div class="topbar__meta" id="topbar-meta">
+      <span class="topbar__hint">Open a .md file to preview it</span>
+    </div>
+    <div class="topbar__actions">
+      <button class="btn-secondary btn-drawer" id="btn-drawer" type="button" hidden aria-expanded="false" aria-controls="sidebar" title="Files and contents">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span class="btn__label">Contents</span>
+      </button>
+      <button class="btn-primary" id="btn-open" type="button" title="Open .md files">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        <span class="btn__label">Open .md files</span>
+      </button>
+      <button class="btn-secondary" id="btn-format" type="button" aria-expanded="false" aria-controls="format-popover" title="Format">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
+        <span class="btn__label">Format</span>
+      </button>
+      <button class="btn-secondary" id="btn-pdf" type="button" disabled title="Export PDF">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
+        <span class="btn__label">Export PDF</span>
+      </button>
+
+      <!-- ── FORMATTING POPOVER ─────────────────────────────────────── -->
+      <div class="format-popover" id="format-popover" role="dialog" aria-label="Formatting options" aria-hidden="true" inert>
+        <div class="ctl-group">
+          <span class="ctl-label">Accent</span>
+          <div class="swatch-row" role="group" aria-label="Accent color">
+            <button class="swatch" data-format="accent" data-value="blue"    style="--sw:var(--blue)"    aria-label="Blue"    type="button"></button>
+            <button class="swatch" data-format="accent" data-value="indigo"  style="--sw:var(--indigo)"  aria-label="Indigo"  type="button"></button>
+            <button class="swatch" data-format="accent" data-value="violet"  style="--sw:var(--violet)"  aria-label="Violet"  type="button"></button>
+            <button class="swatch" data-format="accent" data-value="pink"    style="--sw:var(--pink)"    aria-label="Pink"    type="button"></button>
+            <button class="swatch" data-format="accent" data-value="emerald" style="--sw:var(--emerald)" aria-label="Emerald" type="button"></button>
+            <button class="swatch" data-format="accent" data-value="amber"   style="--sw:var(--amber)"   aria-label="Amber"   type="button"></button>
+            <button class="swatch" data-format="accent" data-value="ink"     style="--sw:var(--ink)"     aria-label="Ink"     type="button"></button>
+            <button class="swatch swatch--mixer" id="btn-mixer" aria-label="Custom accent color" title="Color picker" type="button"></button>
+            <input type="color" id="mixer-input" class="mixer-input" value="#2563EB" tabindex="-1" aria-hidden="true" />
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <span class="ctl-label">Font</span>
+          <div class="font-grid" role="group" aria-label="Article font">
+            <button class="font-opt font-opt--raleway" data-format="font" data-value="raleway" type="button">Raleway</button>
+            <button class="font-opt font-opt--inter"   data-format="font" data-value="inter"   type="button">Inter</button>
+            <button class="font-opt font-opt--poppins" data-format="font" data-value="poppins" type="button">Poppins</button>
+            <button class="font-opt font-opt--lato"    data-format="font" data-value="lato"    type="button">Lato</button>
+          </div>
+        </div>
+
+        <div class="ctl-row">
+          <div class="ctl-group">
+            <span class="ctl-label">Size</span>
+            <div class="seg" role="group" aria-label="Text size">
+              <button class="seg__btn" data-format="scale" data-value="sm" type="button">S</button>
+              <button class="seg__btn" data-format="scale" data-value="md" type="button">M</button>
+              <button class="seg__btn" data-format="scale" data-value="lg" type="button">L</button>
+            </div>
+          </div>
+          <div class="ctl-group">
+            <span class="ctl-label">Spacing</span>
+            <div class="seg" role="group" aria-label="Line spacing">
+              <button class="seg__btn" data-format="leading" data-value="compact" type="button">Tight</button>
+              <button class="seg__btn" data-format="leading" data-value="normal"  type="button">Normal</button>
+              <button class="seg__btn" data-format="leading" data-value="relaxed" type="button">Loose</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <span class="ctl-label">Measure</span>
+          <div class="seg" role="group" aria-label="Content width">
+            <button class="seg__btn" data-format="measure" data-value="narrow"  type="button">Narrow</button>
+            <button class="seg__btn" data-format="measure" data-value="default" type="button">Default</button>
+            <button class="seg__btn" data-format="measure" data-value="wide"    type="button">Wide</button>
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <span class="ctl-label">Theme</span>
+          <div class="seg" role="group" aria-label="Reading theme">
+            <button class="seg__btn" data-format="theme" data-value="light" type="button">Light</button>
+            <button class="seg__btn" data-format="theme" data-value="sepia" type="button">Sepia</button>
+            <button class="seg__btn" data-format="theme" data-value="dark"  type="button">Dark</button>
+            <button class="seg__btn" data-format="theme" data-value="auto"  type="button" title="Follow the system setting">Auto</button>
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <span class="ctl-label">Editor</span>
+          <div class="seg" role="group" aria-label="Live editor pane">
+            <button class="seg__btn" data-format="editor" data-value="off" type="button">Off</button>
+            <button class="seg__btn" data-format="editor" data-value="on"  type="button">On</button>
+          </div>
+        </div>
+
+        <div class="format-popover__footer">
+          <span class="format-popover__note type-mono">Applies to the article only</span>
+          <button class="format-popover__reset" id="btn-format-reset" type="button">Reset</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- hidden file input -->
+  <input type="file" id="file-input" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple style="display:none" />
+
+  <!-- drop overlay -->
+  <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
+    <div class="drop-overlay__inner">
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Drop Markdown files here</span>
+    </div>
+  </div>
+
+  <!-- main layout -->
+  <div class="layout" id="layout">
+
+    <aside class="sidebar" id="sidebar" hidden>
+      <button class="sidebar__close" id="btn-sidebar-close" type="button" aria-label="Hide panel" title="Hide the Files and Contents panel">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <nav class="files" id="files" aria-label="Open files" hidden>
+        <div class="sidebar__label type-eyebrow">Files</div>
+        <ul class="files__list" id="file-list"></ul>
+      </nav>
+      <nav class="toc" id="toc" aria-label="Table of contents" hidden>
+        <div class="sidebar__label type-eyebrow">Contents</div>
+        <ol class="toc__list" id="toc-list"></ol>
+      </nav>
+      <div class="sidebar__resizer" id="sidebar-resizer" role="separator"
+           aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0"
+           title="Drag to resize · double-click to reset"></div>
+    </aside>
+
+    <aside class="editor" id="editor" hidden aria-label="Markdown editor">
+      <div class="editor__resizer" id="editor-resizer" role="separator"
+           aria-orientation="vertical" aria-label="Resize editor" tabindex="0"
+           title="Drag to resize · double-click to reset"></div>
+      <div class="editor__bar">
+        <span class="editor__name type-mono" id="editor-name">document.md</span>
+        <span class="editor__status type-mono" id="editor-status" aria-live="polite"></span>
+        <button class="editor__btn editor__btn--icon" id="btn-editor-wrap" type="button" aria-pressed="true" aria-label="Wrap long lines" title="Wrap long lines">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h15a3 3 0 1 1 0 6h-4"/><polyline points="16 16 14 18 16 20"/><line x1="3" y1="18" x2="10" y2="18"/></svg>
+        </button>
+        <button class="editor__btn" id="btn-editor-revert" type="button" title="Discard edits and restore the original">Revert</button>
+        <button class="editor__btn editor__btn--primary" id="btn-editor-download" type="button" title="Download the edited Markdown">Download .md</button>
+      <button class="editor__btn editor__btn--icon" id="btn-editor-close" type="button" aria-label="Close editor" title="Close editor (Ctrl+E)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      </div>
+      <textarea class="editor__text" id="editor-text" spellcheck="false" wrap="soft"
+                aria-label="Markdown source" placeholder="Open a Markdown file to edit it here"></textarea>
+      <!-- Invisible copy of the textarea's text, one block per source line, used to map
+           the wrapped editor's scroll position back to source lines for scroll sync -->
+      <div class="editor__text editor__mirror" id="editor-mirror" aria-hidden="true"></div>
+    </aside>
+
+    <main class="main-area" id="main-area">
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone__q" aria-hidden="true">
+          <span class="wordmark wordmark--lg">md2web</span>
+        </div>
+        <p class="dropzone__headline type-h2">Open a Markdown file.</p>
+        <div class="dropzone__cta">
+          <button class="btn-primary btn-primary--lg" id="btn-open-drop" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            Choose .md files
+          </button>
+        </div>
+        <p class="dropzone__hint type-caption">Or drag and drop one or more .md files anywhere on this page.</p>
+      </div>
+    </main>
+
+    <article class="article" id="article" hidden>
+      <!-- Per-page printable wrapper: the table's <thead> is repeated on every
+           printed page by Chrome (display: table-header-group). On screen the
+           table-related elements collapse to a plain block layout via display:contents. -->
+      <table class="print-paged" role="presentation">
+        <thead>
+          <tr><td class="print-paged__top">
+            <div class="print-paged__logo" aria-hidden="true">
+              <span class="wordmark">md2web</span>
+              <span class="print-paged__title type-mono" id="print-title"></span>
+            </div>
+          </td></tr>
+        </thead>
+        <tbody>
+          <tr><td class="print-paged__main">
+            <div id="article-header"></div>
+            <div class="article__body" id="article-body"></div>
+          </td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td class="print-paged__bottom" aria-hidden="true"></td></tr>
+        </tfoot>
+      </table>
+    </article>
+
+  </div>
+
+  <footer class="site-footer" id="site-footer" hidden>
+    <div class="site-footer__bar"></div>
+    <div class="site-footer__inner">
+      <span class="wordmark wordmark--sm">md2web</span>
+      <span class="type-mono">rendered from Markdown with md2web</span>
+    </div>
+  </footer>
+
+  <!-- toast: non-blocking notice, optional action (e.g. Undo after Revert) -->
+  <div class="toast" id="toast" role="alert">
+    <span id="toast-text"></span>
+    <button class="toast__action" id="toast-action" type="button" hidden></button>
+  </div>
+
+  <!-- screen-reader announcements (file loaded, formatting changed) -->
+  <span id="sr-live" class="sr-only" aria-live="polite"></span>
+
+  <script defer src="app.js"></script>
+</body>
+</html>

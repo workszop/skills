@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# md2web-open — "Open with md2web" launcher for .md files.
+# Builds a single-file md2web page into ~/.cache/md2web and opens it as an
+# app window in Chrome (falls back to xdg-open). Used by md2web.desktop.
+#
+#   md2web-open file.md [more.md ...]
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/md2web"
+umask 077
+mkdir -p "$CACHE_DIR"
+
+notify() {
+  command -v notify-send >/dev/null 2>&1 && notify-send -a md2web "$1" "${2:-}" || true
+}
+
+# Desktop sessions (COSMIC, GNOME) do not source the login shell, so nvm's node is
+# not on PATH. Prefer a path baked in by install-desktop.sh, then PATH, then nvm.
+find_node() {
+  if [[ -n "${MD2WEB_NODE:-}" && -x "$MD2WEB_NODE" ]]; then echo "$MD2WEB_NODE"; return; fi
+  if command -v node >/dev/null 2>&1; then command -v node; return; fi
+  local n
+  for n in "$HOME"/.nvm/versions/node/*/bin/node /usr/local/bin/node /usr/bin/node /snap/bin/node; do
+    [[ -x "$n" ]] && { echo "$n"; return; }
+  done
+  return 1
+}
+NODE="$(find_node)" || { notify "md2web" "node not found (install Node 18+ or set MD2WEB_NODE)"; echo "md2web-open: node not found" >&2; exit 1; }
+
+if [[ $# -eq 0 ]]; then
+  notify "md2web" "No file given"
+  echo "usage: md2web-open file.md [more.md ...]" >&2
+  exit 2
+fi
+
+# Every window opens through one fixed stub page (open.html#<file>) in a dedicated
+# Chrome profile. Chrome derives an --app window's Wayland app_id from the start URL
+# path + profile name, so a fixed URL and profile give a constant app_id
+# ("chrome-__home_<user>_.cache_md2web_open.html-Default") that md2web.desktop claims via
+# StartupWMClass - that is what puts the md2web icon on the panel. --class covers X11.
+STUB="$CACHE_DIR/open.html"
+cat > "$STUB" <<'EOF'
+<!doctype html><meta charset="utf-8"><title>md2web</title>
+<script>
+  var f = decodeURIComponent(location.hash.slice(1));
+  if (/^[A-Za-z0-9._-]+\.html$/.test(f)) location.replace(f);
+</script>
+EOF
+
+open_page() {
+  local name="$1" bin
+  for bin in google-chrome google-chrome-stable chromium chromium-browser brave-browser; do
+    if command -v "$bin" >/dev/null 2>&1; then
+      nohup "$bin" --user-data-dir="$CACHE_DIR/chrome-profile" --no-first-run \
+        --class=md2web --app="file://$STUB#$name" >/dev/null 2>&1 &
+      return
+    fi
+  done
+  nohup xdg-open "file://$CACHE_DIR/$name" >/dev/null 2>&1 &
+}
+
+for md in "$@"; do
+  if [[ ! -r "$md" ]]; then
+    notify "md2web" "Cannot read: $md"
+    continue
+  fi
+  # Cache name: ASCII slug of the stem + short hash of the full path, so two files
+  # with the same name never clash and the file:// URL needs no escaping.
+  abs="$(readlink -f "$md")"
+  stem="$(basename "${abs%.*}" | tr -c 'A-Za-z0-9._-' '-' | sed 's/^-*//; s/-*$//')"
+  hash="$(printf '%s' "$abs" | md5sum | cut -c1-8)"
+  out="$CACHE_DIR/${stem:-document}-${hash}.html"
+  if ! "$NODE" "$SKILL_DIR/scripts/build.mjs" "$md" --out "$out" --quiet 2>"$CACHE_DIR/last-error.log"; then
+    notify "md2web build failed" "$(tail -n 3 "$CACHE_DIR/last-error.log")"
+    exit 1
+  fi
+  open_page "$(basename "$out")"
+done

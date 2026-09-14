@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=md2web
+Comment=Render a Markdown file as an md2web page
+Exec=env "MD2WEB_NODE=__NODE_BIN__" "__SKILL_DIR__/scripts/md2web-open" %F
+Icon=md2web
+Terminal=false
+MimeType=text/markdown;text/x-markdown;text/plain;
+Categories=Office;Viewer;
+Keywords=markdown;md;html;pdf;viewer;
+StartupNotify=false
+StartupWMClass=__WM_CLASS__

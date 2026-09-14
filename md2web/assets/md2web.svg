@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#2563EB"/>
+  <!-- White lowercase "md" drawn as strokes (no font dependency for icon renderers) -->
+  <g fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 3)">
+    <path d="M26 58v30M26 68a10 10 0 0 1 20 0v20M46 68a10 10 0 0 1 20 0v20"/>
+    <circle cx="88" cy="72" r="14"/>
+    <path d="M102 36v52"/>
+  </g>
+</svg>
