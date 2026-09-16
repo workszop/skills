@@ -1,6 +1,6 @@
 ---
 name: desktop-app
-description: Use when turning a script, CLI or local HTML/web tool into a Linux desktop app - .desktop launcher, "Open with" for a file type, custom app icon, app-like Chrome --app window - or when the panel/dock shows a generic gear or Chrome icon instead of the app's own, or a launcher does nothing when clicked but works from a terminal (COSMIC, GNOME, KDE, Wayland).
+description: Use when turning a script, CLI or local HTML/web tool into a Linux desktop app - .desktop launcher, "Open with" for a file type, custom app icon, app-like Chrome --app window, live reload of a file:// page from a background watcher - or when the panel/dock shows a generic gear or Chrome icon instead of the app's own, or a launcher does nothing when clicked but works from a terminal (COSMIC, GNOME, KDE, Wayland).
 ---
 
 # Desktop App (Linux launcher + panel icon)
@@ -56,6 +56,47 @@ entry="${entry//__WM_CLASS__/"chrome-_${stub}-Default"}"   # host "" + "_" + pat
 ```
 `--class=myapp` still helps X11/XWayland. Also inline the icon as the page favicon.
 
+## Live reload from a file watcher (Chrome --app, file://)
+The launcher exits right after starting Chrome, so "refresh the window when the file is saved"
+needs a detached watcher plus a way for a `file://` page to notice the rebuild. Reference:
+`md2web-open` + `build.mjs --watch` + the `initLiveReload` block in `app.js`.
+
+1. **Poll with a `<script>` tag, not fetch.** `fetch()`/XHR between `file://` URLs is blocked
+   in Chrome; a `<script src="<page>.ver.js?t=<now>">` from the page's own folder loads fine.
+   The watcher rewrites the page **and** a sidecar `<page>.html.ver.js` that sets
+   `window.__myappVersion = "<source hash>"`; the page compares it with the hash baked into
+   itself and calls `location.reload()` (scroll position via sessionStorage first). No server,
+   no `--allow-file-access-from-files`.
+2. **Poll the source with `fs.watchFile`, not `fs.watch`.** Editors that save by replacing the
+   file (vim, Obsidian, LibreOffice) break inotify watches on the old inode; stat polling
+   (500 ms) survives them. Rebuild on content-hash change, not mtime, or every touch reloads.
+3. **Watcher lifetime = the Chrome profile, not the document URL.** Every N polls scan
+   `/proc/*/cmdline` for the `--user-data-dir=<profile>` path; exit after 3 consecutive misses
+   (Chrome needs a few seconds to start) and after a hard cap (12 h). Do not match the
+   per-document `--app=...#page.html`: the second document is handed to the already-running
+   Chrome, its URL never appears in any cmdline, and that watcher would quit at once. **Skip `process.pid`**: the watcher's own
+   argv carries the needle (same trap as `pkill -f`, see Verifying), so a self-match keeps it
+   alive forever.
+4. **One watcher per built page.** PID file next to the build (`<page>.watch.pid`); it is
+   alive only if `/proc/<pid>/cmdline` still names that output path (pids get reused). Test
+   `-r /proc/$pid/cmdline` before redirecting from it, or bash prints the ENOENT itself.
+   `nohup "$NODE" build.mjs "$md" --out "$out" --watch --watch-owner "$profile" >/dev/null 2>"$log" </dev/null &`
+5. **Never reload over unsaved in-page edits.** If the page has its own editor, compare current
+   text with the embedded original; when they differ show a toast with a Reload action instead.
+
+Testing the whole chain from a Claude/terminal session:
+- **Emulate the desktop launch with `systemd-run --user --scope`**, not a service unit. A
+  service (`systemd-run --user --collect ... launcher`) makes the launcher its main PID and
+  kills every `nohup`'d child (Chrome, watcher) the moment it exits - silently, no log. A scope
+  has no main PID and lives while any process does, which is how the file manager launches
+  apps too. Then `wl-toplevels.py`, `ps` for the watcher, edit the file, check the sidecar.
+- **Browser test over `file://`, not http.** Headless Chrome via CDP can `Page.navigate` to a
+  `file://` page; that is the only way to prove the `<script>` poll works where fetch is blocked.
+- **Owner-gone test**: run the watcher with `--watch-owner some-never-existing-needle` and
+  assert it exits; it only passes once the self-pid skip is in.
+- Chrome's crashpad helper outlives the browser and keeps writing into the profile, so a
+  recursive `rmSync` in teardown hits `ENOTEMPTY`; loop the delete for up to ~15 s.
+
 ## Icon
 - SVG in `~/.local/share/icons/hicolor/scalable/apps/<name>.svg`, `Icon=<name>` (no path, no extension).
 - Draw letters as paths/strokes, not `<text>` - icon renderers may lack the font.
@@ -70,6 +111,10 @@ entry="${entry//__WM_CLASS__/"chrome-_${stub}-Default"}"   # host "" + "_" + pat
 | Click does nothing, terminal works | desktop PATH lacks nvm/node | absolute path baked in Exec |
 | Not in "Open with" | missing MimeType or stale cache | `MimeType=text/markdown;`, `update-desktop-database` |
 | Old windows keep old icon | launched before the change | close and reopen them |
+| Page never notices a rebuild on file:// | fetch/XHR blocked between file:// URLs | poll a sidecar with `<script src>` |
+| Watcher quits when a 2nd file is opened | it matched the per-document `--app` URL | match the `--user-data-dir` path |
+| Watcher never exits after window close | owner needle matched its own argv | skip `process.pid` in the /proc scan |
+| Children vanish in a `systemd-run` test | service unit reaps them when main PID exits | `systemd-run --user --scope` |
 
 ## Verifying
 - Open via the real path (file manager / launcher) or the launcher script with the baked env.
@@ -83,3 +128,4 @@ entry="${entry//__WM_CLASS__/"chrome-_${stub}-Default"}"   # host "" + "_" + pat
 - Declaring the icon fixed from the formula or an X11 test without reading the Wayland app_id.
 - Editing the installed `~/.local/share/applications/*.desktop` instead of the template + installer.
 - Forgetting `--remove` in the installer (delete entry + icon, refresh caches).
+- Watching with inotify (`fs.watch`) - replace-on-save editors leave it watching a dead inode.
