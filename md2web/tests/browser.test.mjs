@@ -1,11 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { buildHtml } from '../scripts/build.mjs';
+import { buildHtml, sourceVersion } from '../scripts/build.mjs';
+
+// Chrome's crashpad helper can outlive the main process and keep writing into the profile,
+// so a recursive rm may hit ENOTEMPTY; keep trying until it is really gone.
+async function removeDirEventually(dir, ms = 15000) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    try { rmSync(dir, { recursive: true, force: true }); return; }
+    catch (e) { if (Date.now() > deadline) throw e; await new Promise(resolve => setTimeout(resolve, 200)); }
+  }
+}
 
 // Chrome's private CDP pipe avoids WebSocket dependencies and shared debug ports.
 async function startBrowser(profile) {
@@ -231,7 +242,83 @@ test('browser regressions', { timeout: 60000 }, async t => {
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
-    // Chrome may still be flushing its profile right after exit; retry instead of failing teardown
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await removeDirEventually(dir);
+  }
+});
+
+// Live reload: a page built with --watch polls its .ver.js sidecar and reloads itself
+// when the version changes, unless the reader has unsaved in-page edits. Runs over
+// file:// like the desktop app, where fetch() is blocked and only <script> can poll.
+test('live reload follows the sidecar version', { timeout: 60000 }, async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'md2web-live-test-'));
+  const input = join(dir, 'doc.md');
+  const long = n => '# ' + n + '\n\n' + Array.from({ length: 80 }, (_, i) => 'Paragraph ' + i + ' of ' + n + '.').join('\n\n') + '\n';
+  function publish(source) {
+    writeFileSync(input, source);
+    writeFileSync(join(dir, 'doc.html'), buildHtml(input, {}, { watchSidecar: 'doc.html.ver.js' }));
+    writeFileSync(join(dir, 'doc.html.ver.js'), 'window.__md2webVersion = ' + JSON.stringify(sourceVersion(source)) + ';\n');
+  }
+  publish(long('First'));
+  let browser;
+  try {
+    browser = await startBrowser(join(dir, 'profile'));
+    const { targetId } = await browser.call('Target.createTarget', { url: 'about:blank' });
+    const { sessionId } = await browser.call('Target.attachToTarget', { targetId, flatten: true });
+    const call = (method, params) => browser.call(method, params, sessionId);
+    async function evaluate(expression) {
+      const result = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+      assert.ok(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
+      return result.result.value;
+    }
+    async function until(expression, what, ms = 8000) {
+      const deadline = Date.now() + ms;
+      for (;;) {
+        let value = null;
+        try { value = await evaluate(expression); } catch (e) { /* mid-navigation */ }
+        if (value === true) return;
+        assert.ok(Date.now() < deadline, 'timed out waiting for ' + what);
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    await call('Runtime.enable');
+    await call('Network.enable');
+    await call('Network.setBlockedURLs', { urls: ['*fonts.googleapis.com*', '*fonts.gstatic.com*'] });
+    await call('Page.navigate', { url: pathToFileURL(join(dir, 'doc.html')).href });
+    await until(`document.documentElement?.dataset.md2webReady === 'true'`, 'app ready');
+
+    await t.test('the page advertises live mode through the DOM contract', async () => {
+      assert.equal(await evaluate('document.documentElement.dataset.md2webLive'), 'on');
+    });
+    await t.test('a new sidecar version reloads the page and keeps the scroll position', async () => {
+      await evaluate('window.scrollTo(0, 600)');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      publish(long('Second'));
+      await until(`document.documentElement?.dataset.md2webReady === 'true' && document.querySelector('#article-body h1')?.textContent === 'Second'`, 'reload after change');
+      const y = await evaluate('window.scrollY');
+      assert.ok(Math.abs(y - 600) < 40, 'scroll restored, got ' + y);
+    });
+    await t.test('unsaved in-page edits block auto reload and offer it in a toast', async () => {
+      await evaluate(`(() => {
+        document.querySelector('#btn-format').click();
+        document.querySelector('[data-format=editor][data-value=on]').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'}));
+        const editor = document.querySelector('#editor-text');
+        editor.value = '# Mine\\n\\nunsaved';
+        editor.dispatchEvent(new Event('input'));
+        document.querySelector('#btn-editor-close').click();
+      })()`);
+      assert.equal(await evaluate(`document.querySelector('#article-body h1').textContent`), 'Mine');
+      publish(long('Third'));
+      await until(`document.querySelector('#toast').classList.contains('toast--visible')`, 'toast');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      assert.deepEqual(await evaluate(`({h1:document.querySelector('#article-body h1').textContent, text:document.querySelector('#toast-text').textContent, action:document.querySelector('#toast-action').textContent})`),
+        { h1: 'Mine', text: 'File changed on disk. Reload discards your edits', action: 'Reload' });
+      await evaluate(`document.querySelector('#toast-action').click()`);
+      await until(`document.documentElement?.dataset.md2webReady === 'true' && document.querySelector('#article-body h1')?.textContent === 'Third'`, 'reload from toast');
+    });
+    assert.deepEqual(browser.pageErrors, []);
+  } finally {
+    if (browser) await browser.close();
+    await removeDirEventually(dir);
   }
 });

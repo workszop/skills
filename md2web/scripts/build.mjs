@@ -8,6 +8,7 @@
  *                  [--font raleway|inter|poppins|lato] [--size sm|md|lg]
  *                  [--spacing compact|normal|relaxed] [--measure narrow|default|wide]
  *                  [--theme light|sepia|dark|auto] [--chrome /path/to/chrome] [--quiet]
+ *                  [--watch [--watch-owner <cmdline-substring>]]
  *
  * Output: the full md2web app (Open / Format / Export PDF still work) with
  * tokens.css, md-styles.css and app.js inlined and the Markdown embedded as
@@ -16,7 +17,7 @@
  * data URIs, so the page renders offline; only Google Fonts still need network.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, realpathSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, realpathSync, statSync, watchFile, unwatchFile, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { basename, dirname, resolve, extname, join } from 'node:path';
@@ -46,6 +47,11 @@ const CHROME_CANDIDATES = [
   'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome', 'brave-browser',
 ].filter(Boolean);
 const CHROME_PROBE_TIMEOUT_MS = 2000;
+// --watch: poll the source (survives editors that replace the file), stop when the
+// owner process (the Chrome profile that shows the page) has been gone for a while
+const WATCH_POLL_MS = 500;
+const WATCH_OWNER_MISSES = 3;          // consecutive owner checks (every 10 polls) that may fail
+const WATCH_MAX_MS = 12 * 60 * 60 * 1000;
 
 // ─── CLI parsing ───
 function usage(msg) {
@@ -55,7 +61,7 @@ function usage(msg) {
 }
 
 function parseArgs(argv) {
-  const args = { defaults: {}, pdf: false, pdfPath: null, out: null, chrome: null, quiet: false };
+  const args = { defaults: {}, pdf: false, pdfPath: null, out: null, chrome: null, quiet: false, watch: false, watchOwner: null, watchPoll: WATCH_POLL_MS };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => { const v = argv[++i]; if (v === undefined) usage('missing value for ' + a); return v; };
@@ -65,6 +71,9 @@ function parseArgs(argv) {
     else if (a === '--pdf') { args.pdf = true; if (argv[i + 1] && /\.pdf$/i.test(argv[i + 1])) args.pdfPath = argv[++i]; }
     else if (a === '--chrome') args.chrome = next();
     else if (a === '--quiet' || a === '-q') args.quiet = true;
+    else if (a === '--watch') args.watch = true;
+    else if (a === '--watch-owner') args.watchOwner = next();
+    else if (a === '--watch-poll') { args.watchPoll = parseInt(next(), 10); if (!(args.watchPoll > 0)) usage('--watch-poll needs a positive number of ms'); }
     else if (a === '--accent') {
       const v = next().toLowerCase();
       if (ACCENTS.includes(v)) args.defaults.accent = v;
@@ -138,7 +147,7 @@ function findChrome(explicit) {
 }
 
 // ─── Build ───
-export function buildHtml(mdPath, defaults = {}, { warn = msg => console.error('md2web: ' + msg) } = {}) {
+export function buildHtml(mdPath, defaults = {}, { warn = msg => console.error('md2web: ' + msg), watchSidecar = null } = {}) {
   const raw    = readFileSync(mdPath, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   const name   = basename(mdPath);
   const shell  = readFileSync(join(APP_DIR, 'index.html'), 'utf8');
@@ -161,6 +170,9 @@ export function buildHtml(mdPath, defaults = {}, { warn = msg => console.error('
     assets: collectAssets(raw, dirname(resolve(mdPath)), warn),
     source: raw,
   };
+  // Live reload: the page polls the sidecar (a sibling <script>) and reloads when its
+  // version no longer matches the one baked in here. See watchBuild().
+  if (watchSidecar) config.watch = { sidecar: watchSidecar, version: sourceVersion(raw) };
 
   let html = shell;
   const favicon = 'data:image/svg+xml;base64,' + readFileSync(join(APP_DIR, '..', 'assets', 'md2web.svg')).toString('base64');
@@ -190,6 +202,61 @@ export function buildHtml(mdPath, defaults = {}, { warn = msg => console.error('
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+export function sourceVersion(raw) {
+  return createHash('sha1').update(raw).digest('hex').slice(0, 12);
+}
+
+// The sidecar is plain JS so a file:// page can load it with a <script> tag (fetch is
+// blocked between file:// URLs); the query-string cache-buster is added by the page.
+function writeSidecar(outHtml, version) {
+  writeFileSync(outHtml + '.ver.js', 'window.__md2webVersion = ' + JSON.stringify(version) + ';\n');
+}
+
+// Any process whose /proc/<pid>/cmdline contains `needle` counts as alive (Linux only).
+function processAlive(needle) {
+  let pids;
+  try { pids = readdirSync('/proc').filter(n => /^\d+$/.test(n)); } catch (e) { return true; }  // no /proc: never give up
+  for (const pid of pids) {
+    if (Number(pid) === process.pid) continue;   // our own argv carries the needle
+    try { if (readFileSync('/proc/' + pid + '/cmdline', 'latin1').includes(needle)) return true; }
+    catch (e) { /* process vanished or not ours */ }
+  }
+  return false;
+}
+
+// Rebuild `outHtml` (+ its .ver.js sidecar) whenever `input` changes. Resolves when the
+// watch ends: the owner process disappeared, the max lifetime passed, or stop() was called.
+export function watchBuild(input, outHtml, defaults, { owner = null, poll = WATCH_POLL_MS, maxMs = WATCH_MAX_MS, log = () => {} } = {}) {
+  const sidecar = basename(outHtml) + '.ver.js';
+  const build = () => {
+    const html = buildHtml(input, defaults, { watchSidecar: sidecar });
+    const version = sourceVersion(readFileSync(input, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
+    writeFileSync(outHtml, html);
+    writeSidecar(outHtml, version);
+    return version;
+  };
+  let version = build();
+  log('watching ' + input);
+  return new Promise(resolve => {
+    let ticks = 0, misses = 0;
+    const startedAt = Date.now();
+    const stop = reason => { unwatchFile(input, onChange); clearInterval(timer); log('stopped: ' + reason); resolve(reason); };
+    const onChange = () => {
+      try {
+        const next = build();
+        if (next !== version) { version = next; log('rebuilt ' + basename(outHtml)); }
+      } catch (err) { log('rebuild failed: ' + err.message); }   // keep the old page; try again on the next save
+    };
+    watchFile(input, { interval: poll, persistent: true }, onChange);
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > maxMs) return stop('max lifetime');
+      if (!owner || ++ticks % 10) return;
+      misses = processAlive(owner) ? 0 : misses + 1;
+      if (misses >= WATCH_OWNER_MISSES) stop('owner gone');
+    }, poll);
+  });
 }
 
 export function renderPdf(htmlPath, pdfPath, chromeBin) {
@@ -232,7 +299,14 @@ if (isMain()) {
   const stem = basename(input, extname(input));
   const outHtml = resolve(args.out || join(dirname(input), stem + '.html'));
   mkdirSync(dirname(outHtml), { recursive: true });
-  writeFileSync(outHtml, buildHtml(input, args.defaults));
+  if (args.watch) {
+    if (args.pdf) usage('--watch cannot be combined with --pdf');
+    const log = args.quiet ? () => {} : msg => console.log('md2web: ' + msg);
+    watchBuild(input, outHtml, args.defaults, { owner: args.watchOwner, poll: args.watchPoll, log })
+      .then(() => process.exit(0));
+  } else {
+    writeFileSync(outHtml, buildHtml(input, args.defaults));
+  }
   if (!args.quiet) console.log('html: ' + outHtml);
 
   if (args.pdf) {

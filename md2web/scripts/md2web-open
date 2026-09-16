@@ -2,6 +2,9 @@
 # md2web-open — "Open with md2web" launcher for .md files.
 # Builds a single-file md2web page into ~/.cache/md2web and opens it as an
 # app window in Chrome (falls back to xdg-open). Used by md2web.desktop.
+# A background watcher (build.mjs --watch) then rebuilds the page whenever the
+# .md is saved, and the page reloads itself; the watcher leaves when the md2web
+# Chrome profile has closed. MD2WEB_NO_WATCH=1 opens without it.
 #
 #   md2web-open file.md [more.md ...]
 set -euo pipefail
@@ -60,6 +63,23 @@ open_page() {
   nohup xdg-open "file://$CACHE_DIR/$name" >/dev/null 2>&1 &
 }
 
+# One watcher per built page. PID file beside the build; liveness = the pid's
+# cmdline still names this output (pids get reused).
+start_watcher() {
+  local md="$1" out="$2" pidfile="${2%.html}.watch.pid" pid
+  [[ -n "${MD2WEB_NO_WATCH:-}" ]] && return
+  if [[ -r "$pidfile" ]]; then
+    pid="$(<"$pidfile")"
+    if [[ "$pid" =~ ^[0-9]+$ && -r "/proc/$pid/cmdline" ]] && tr '\0' ' ' <"/proc/$pid/cmdline" | grep -qF -- "$out"; then
+      return
+    fi
+  fi
+  nohup "$NODE" "$SKILL_DIR/scripts/build.mjs" "$md" --out "$out" --quiet --watch \
+    --watch-owner "$CACHE_DIR/chrome-profile" --watch-poll "${MD2WEB_WATCH_POLL:-500}" \
+    >/dev/null 2>"${out%.html}.watch.log" </dev/null &
+  echo $! > "$pidfile"
+}
+
 for md in "$@"; do
   if [[ ! -r "$md" ]]; then
     notify "md2web" "Cannot read: $md"
@@ -76,4 +96,5 @@ for md in "$@"; do
     exit 1
   fi
   open_page "$(basename "$out")"
+  start_watcher "$abs" "$out"
 done

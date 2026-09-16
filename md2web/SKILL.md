@@ -47,10 +47,22 @@ desktop "Open with" cache. CRLF files and a UTF-8 BOM are normalised on load.
 | `--theme` | `light` `sepia` `dark` `auto` (follows the OS; PDF always prints light) | light |
 | `--pdf [file]` | render A4 PDF with headless Chrome after the HTML | off |
 | `--chrome PATH` | Chrome/Chromium binary (auto-detected otherwise) | auto |
+| `--watch` | keep running and rebuild on every save; the open page reloads itself (see below) | off |
 
 Accent colours the article (headings rule, links, code keywords, table header, task ticks).
 The interface stays blue regardless. Custom hex accents get hover and wash variants derived
 automatically with `color-mix()`.
+
+### Live reload (`--watch`)
+
+`--watch` builds once, then polls the source (so editors that replace the file on save are
+fine) and rewrites the page plus a sibling `<page>.html.ver.js` holding the source hash. The
+page polls that sidecar with a `<script>` tag every second (the one thing a `file://` page may
+load from its own folder) and reloads when the hash moves, restoring the scroll position. If the
+reader has unsaved in-page edits it does not reload; a toast offers *Reload* instead. The page
+exposes `data-md2web-live="on"` while polling. `--watch-owner <substring>` makes the watcher exit
+once no process with that text in its command line is alive; it also stops after 12 hours.
+`--watch` cannot be combined with `--pdf`.
 
 ## Front matter
 
@@ -92,6 +104,11 @@ so the page works offline; only Google Fonts need network), Google Chrome or Chr
 manager (COSMIC Files, Nautilus, etc.). It builds the page into `~/.cache/md2web/` and opens
 it as a Chrome app window. Add `--default` to make md2web the default for `text/markdown`,
 `--remove` to uninstall.
+
+The launcher also starts one `build.mjs --watch` per opened file (pid file next to the build,
+log in `<page>.watch.log`), so saving the `.md` from any editor refreshes the window within
+about a second. The watcher exits on its own once the md2web Chrome profile has closed.
+`MD2WEB_NO_WATCH=1` opens without it.
 
 ## Layout
 

@@ -27,6 +27,9 @@ any `.md` into a **single self-contained `.html`** or an **A4 PDF** from the com
   button, and below 760 px the top-bar buttons collapse to icons - nothing is hidden on phones.
 - **Local images inlined** by the build (`![..](img/x.png)`, `<img src>`; up to 8 MB each), so a
   built page is genuinely self-contained.
+- **Live reload** — `build.mjs --watch` (and the desktop "Open with" launcher) rebuilds the page
+  on every save and the open window refreshes itself, keeping your scroll position. Unsaved
+  in-page edits are never overwritten: a toast offers *Reload* instead.
 - **PDF export** — native print → "Save as PDF" with A4 layout and a repeating md2web header;
   or headless from the CLI with `--pdf`.
 
@@ -39,6 +42,7 @@ xdg-open app/index.html
 # Build a single-file page (and a PDF) from any Markdown file
 node scripts/build.mjs notes.md
 node scripts/build.mjs notes.md --pdf --accent emerald --font inter
+node scripts/build.mjs notes.md --watch    # keep rebuilding; the open page reloads itself
 
 # Register "Open with md2web" for .md files in the file manager (Linux)
 scripts/install-desktop.sh            # add --default to make it the default app
@@ -79,7 +83,7 @@ One `key: value` per line, quotes stripped. Lists and nested objects are not sup
 | `app/tokens.css` | Design tokens (brand blue, accent palette, type scale, spacing) |
 | `app/sample.md` | Demo document |
 | `scripts/build.mjs` | Markdown → single-file HTML, optional `--pdf` via headless Chrome |
-| `scripts/md2web-open` | "Open with" launcher (builds to `~/.cache/md2web`, opens a Chrome app window) |
+| `scripts/md2web-open` | "Open with" launcher (builds to `~/.cache/md2web`, opens a Chrome app window, starts a `--watch` rebuilder per file) |
 | `scripts/md2web.desktop`, `scripts/install-desktop.sh` | Linux desktop integration |
 | `assets/md2web.svg` | App icon |
 
@@ -113,7 +117,7 @@ One `key: value` per line, quotes stripped. Lists and nested objects are not sup
 Run from the project root with Node 18+; no npm packages are required:
 
 ```bash
-node --test tests/annotation.test.mjs tests/build.test.mjs
+node --test tests/annotation.test.mjs tests/build.test.mjs tests/watch.test.mjs tests/launcher.test.mjs
 node --test tests/browser.test.mjs
 ```
 
@@ -122,6 +126,11 @@ and permission to run a sandboxed browser and a loopback HTTP server. It builds 
 offline page, checks the real DOM and editor/print behavior, and removes its browser profile
 and server afterward. Annotation tests check source-line accuracy and linear scan work;
 build tests cover CLI format options, bounded Chrome discovery, and sandboxed PDF arguments.
+Watch tests drive `--watch` as a child process (rebuild on save, sidecar version, owner-gone
+exit); the launcher test runs `md2web-open` against a fake `google-chrome` on `PATH` and checks
+that one watcher is started per file and reused on reopen. The browser suite's second test
+opens a watched page over `file://` and verifies the reload, the scroll restore and the
+unsaved-edits toast.
 
 ## License
 

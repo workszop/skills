@@ -38,6 +38,10 @@
   const EDITOR_STATE_KEY   = 'md2web-editor';
   const EDITOR_WRAP_KEY    = 'md2web-editor-wrap';
   const SIDEBAR_STATE_KEY  = 'md2web-sidebar';   // 'off' when the user hid the Files/Contents panel
+  // Live reload (pages built with --watch): poll the .ver.js sidecar this often and
+  // carry the scroll position across the reload in sessionStorage.
+  const LIVE_POLL_MS       = 1000;
+  const LIVE_SCROLL_KEY    = 'md2web-live-scroll:' + (CONFIG.storageKey || '');
   const NARROW_QUERY       = '(max-width: 1100px)';  // must match the drawer breakpoint in md-styles.css
   const EDITOR_DEBOUNCE_MS = 150;
   const SYNC_GAP           = 24;   // px below the top bar where a synced heading should land
@@ -70,6 +74,8 @@
   let syncTimer   = null;       // editor -> article scroll sync, one per frame
   let suppressSync = false;     // ignore the scroll event caused by setting textarea.value
   let toastTimer  = null;
+  let liveTimer   = null;       // sidecar poll while a --watch build is live
+  let liveNotified = false;     // "changed on disk" toast shown once per version
   let lastRevert  = null;       // { id, raw } so Revert can be undone from the toast
   let lineOffset  = 0;          // source lines removed before the body (front matter)
   let schemeQuery = null;       // matchMedia(prefers-color-scheme) for the "auto" theme
@@ -1201,13 +1207,61 @@
     const draftKey = draftPrefix + hashString(source);
     pruneDrafts(draftPrefix, draftKey);
     const draft = loadDraft(draftKey);
-    const entry = { id: ++docSeq, name: CONFIG.name || 'document.md', raw: draft !== null ? normalizeSource(draft) : source, original: source, scroll: 0, draftKey, modified: CONFIG.modified || 0 };
+    const entry = { id: ++docSeq, name: CONFIG.name || 'document.md', raw: draft !== null ? normalizeSource(draft) : source, original: source, scroll: liveScrollRestore(), draftKey, modified: CONFIG.modified || 0 };
     docs.push(entry);
     activateDoc(entry.id);
+    initLiveReload();
     document.title = entry.name.replace(MD_FILE_RE, '') + ' · md2web';
     // DOM contract for agents/verification: the embedded document is rendered.
     // (Together with data-md2web-docs and data-md2web-editor on <html>.)
     document.documentElement.setAttribute('data-md2web-ready', 'true');
+  }
+
+  // ── Live reload (scripts/build.mjs --watch) ─────────────────────────────────
+  // The watcher rewrites the page and a sibling <name>.html.ver.js that sets
+  // window.__md2webVersion. A <script> tag is the one thing a file:// page may load
+  // from its own folder, so poll with that; when the version moves, reload - unless
+  // the reader has unsaved in-page edits, then only offer it.
+  function initLiveReload() {
+    const watch = CONFIG.watch;
+    if (!watch || !watch.sidecar || !watch.version) return;
+    document.documentElement.setAttribute('data-md2web-live', 'on');
+    liveTimer = setInterval(pollLive, LIVE_POLL_MS);
+  }
+
+  function pollLive() {
+    const script = document.createElement('script');
+    script.src = CONFIG.watch.sidecar + '?t=' + Date.now();
+    script.onload = () => { script.remove(); onLiveVersion(window.__md2webVersion); };
+    script.onerror = () => script.remove();   // watcher gone or file missing: try again later
+    document.head.appendChild(script);
+  }
+
+  function onLiveVersion(version) {
+    if (!version || version === CONFIG.watch.version) return;
+    const doc = docs.find(d => d.draftKey);   // the embedded document
+    if (doc && doc.raw !== doc.original) {
+      if (liveNotified) return;
+      liveNotified = true;
+      showToast('File changed on disk. Reload discards your edits', { action: 'Reload', onAction: liveReload, ms: 60000 });
+      return;
+    }
+    liveReload();
+  }
+
+  function liveReload() {
+    clearInterval(liveTimer);
+    try { sessionStorage.setItem(LIVE_SCROLL_KEY, String(window.scrollY)); } catch (e) { /* private mode */ }
+    location.reload();
+  }
+
+  function liveScrollRestore() {
+    if (!CONFIG.watch) return 0;
+    try {
+      const y = sessionStorage.getItem(LIVE_SCROLL_KEY);
+      sessionStorage.removeItem(LIVE_SCROLL_KEY);
+      return y ? Number(y) || 0 : 0;
+    } catch (e) { return 0; }
   }
 
   // Drafts of earlier builds of the same document (same slug, other content hash)
