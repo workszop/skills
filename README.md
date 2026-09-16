@@ -4,7 +4,7 @@ collection of useful skills
 | Skill | What it does |
 |---|---|
 | [md2web](md2web/) | Turns a Markdown file into a polished, self-contained HTML page or an A4 PDF, with a live editor, formatting panel, live reload on save (`--watch`) and Linux "Open with md2web" desktop integration. |
-| [desktop-app](desktop-app/) | Makes a script, CLI or local web tool feel like a Linux desktop app: `.desktop` launcher, "Open with" for a file type, custom panel icon for Chrome `--app` windows on Wayland, plus `wl-toplevels.py` to read window app_ids. |
+| [desktop-app](desktop-app/) | Makes a script, CLI or local web tool feel like a Linux desktop app: `.desktop` launcher, "Open with" for a file type, custom panel icon for Chrome `--app` windows on Wayland, live reload of a `file://` page from a background watcher, plus `wl-toplevels.py` to read window app_ids. |
 | [page-agent](page-agent.md) | Adds a PageAgent-style in-browser AI assistant panel to static or app-backed websites. |
 
 ## Install
