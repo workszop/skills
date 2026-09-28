@@ -214,9 +214,9 @@ test('browser regressions', { timeout: 60000 }, async t => {
       assert.equal(await evaluate('document.documentElement.dataset.md2webPagebreaks'), '1');
       assert.equal(await printedPages(), 2);
     });
-    await t.test('text ending near the bottom of a page never adds a header-only page', async () => {
+    await t.test('text ending near the bottom of a page never adds a blank page', async () => {
       // A spacer pushes the last line across the page bottom; a trailing rule or a bottom
-      // margin used to spill onto a new page that held only the running header.
+      // margin used to spill onto a new, blank page.
       const spacer = h => 'Start.\n\n<img height="' + h + '" width="8" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">\n\nEnd.';
       for (let h = 700; h <= 1000; h += 6) {
         await edit(spacer(h));

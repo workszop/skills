@@ -96,7 +96,7 @@ title gives a cover page. The page reports active breaks as `data-md2web-pagebre
    it, serve the directory with `python3 -m http.server` and open it in Chrome, or open the
    `file://` path directly.
 3. For PDF, check the page count with `pdfinfo` and rasterise a page with `pdftoppm -r 40 -png`
-   to eyeball the layout. The PDF has a repeating "md2web · title" header on every page; code
+   to eyeball the layout. Pages carry no header or footer, only margins; code
    blocks of 30+ lines and tables of 20+ rows are allowed to break across pages.
    The rendered page exposes a DOM contract on `<html>`: `data-md2web-ready="true"`,
    `data-md2web-docs="<n>"`, `data-md2web-editor="on|off"`, `data-md2web-sidebar="on|off"`,

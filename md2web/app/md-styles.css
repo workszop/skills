@@ -1147,7 +1147,7 @@ body {
 /* ==========================================================================
    PRINT — A4 portrait
    @page margin:0 suppresses Chrome's auto URL/page-number headers and footers.
-   Per-page padding comes from the table-header-group <thead> repeating at top.
+   Per-page margins come from the empty <thead>/<tfoot> repeating on every page.
    ========================================================================== */
 @page {
   size: A4 portrait;
@@ -1225,30 +1225,10 @@ body {
   .print-paged__main,
   .print-paged__bottom         { display: table-cell         !important; padding: 0; }
 
-  /* Repeating per-page top: md2web wordmark + leading spacing */
+  /* Repeating per-page top: empty cell that reserves the top margin on every page */
   .print-paged__top {
-    padding: 14mm 18mm 8mm 18mm !important;
-  }
-  .print-paged__logo {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12pt;
-  }
-  .print-paged__logo .wordmark {
-    font-size: 13pt;
-    color: var(--brand) !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .print-paged__title {
-    font-size: 8pt;
-    color: var(--page-fg-3);
-    letter-spacing: var(--tracking-caps);
-    text-transform: uppercase;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    height: 18mm !important;
+    padding: 0 18mm !important;
   }
 
   /* Repeating per-page bottom: empty cell that reserves bottom margin on every page */
@@ -1372,7 +1352,7 @@ body {
 
   /* Nothing may spill past the last printed block: its bottom margin (or a
      trailing rule / idle break) would otherwise open a page holding only the
-     running header when the text ends near the bottom of a page. */
+     top margin when the text ends near the bottom of a page. */
   .md-pagebreak--idle,
   .md-hr--trailing { display: none !important; }
   .md-block--last,

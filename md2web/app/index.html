@@ -221,17 +221,13 @@
     </main>
 
     <article class="article" id="article" hidden>
-      <!-- Per-page printable wrapper: the table's <thead> is repeated on every
-           printed page by Chrome (display: table-header-group). On screen the
+      <!-- Per-page printable wrapper: the table's empty <thead>/<tfoot> repeat on every
+           printed page (display: table-header/footer-group), reserving the top and
+           bottom page margins. On screen the
            table-related elements collapse to a plain block layout via display:contents. -->
       <table class="print-paged" role="presentation">
         <thead>
-          <tr><td class="print-paged__top">
-            <div class="print-paged__logo" aria-hidden="true">
-              <span class="wordmark">md2web</span>
-              <span class="print-paged__title type-mono" id="print-title"></span>
-            </div>
-          </td></tr>
+          <tr><td class="print-paged__top" aria-hidden="true"></td></tr>
         </thead>
         <tbody>
           <tr><td class="print-paged__main">

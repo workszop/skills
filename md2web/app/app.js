@@ -86,7 +86,7 @@
 
   // ── DOM refs (resolved on DOMContentLoaded) ───────────────────────────────
   let layout, mainArea, article;
-  let articleHeader, articleBody, tocNav, tocList, topbarMeta, siteFooter, printTitle;
+  let articleHeader, articleBody, tocNav, tocList, topbarMeta, siteFooter;
   let sidebar, filesNav, fileList, srLive, btnDrawer, btnSidebarClose;
   let editorMirror, btnEditorWrap;
   let btnPdf, btnFormat, formatPopover, mixerInput, mixerBtn;
@@ -465,14 +465,13 @@
     topbarMeta.innerHTML =
       '<span class="topbar__filename type-mono">' + escapeHtml(label) + '</span>' +
       (dateStr ? '<span class="topbar__date type-mono" title="Last changed">' + escapeHtml(dateStr) + '</span>' : '');
-    printTitle.textContent = fm.title || (doc.name || '').replace(MD_FILE_RE, '');
     return true;
   }
 
   // A forced break with nothing printable after it (end of document, only rules left, or
   // another break next) or before it (first block, no front-matter header) would print a
-  // page holding just the running header. Such breaks stay visible on screen but are
-  // idle in print; a trailing rule is dropped from print for the same reason.
+  // blank page. Such breaks stay visible on screen but are idle in print; a trailing rule
+  // is dropped from print for the same reason.
   function markIdlePageBreaks() {
     const blocks = Array.from(articleBody.children);
     const isBreak = el => el.classList.contains('md-pagebreak');
@@ -1173,7 +1172,6 @@
     tocList       = document.getElementById('toc-list');
     topbarMeta    = document.getElementById('topbar-meta');
     siteFooter    = document.getElementById('site-footer');
-    printTitle    = document.getElementById('print-title');
     srLive        = document.getElementById('sr-live');
     btnDrawer     = document.getElementById('btn-drawer');
     btnSidebarClose = document.getElementById('btn-sidebar-close');

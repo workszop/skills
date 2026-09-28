@@ -30,9 +30,9 @@ any `.md` into a **single self-contained `.html`** or an **A4 PDF** from the com
 - **Live reload** — `build.mjs --watch` (and the desktop "Open with" launcher) rebuilds the page
   on every save and the open window refreshes itself, keeping your scroll position. Unsaved
   in-page edits are never overwritten: a toast offers *Reload* instead.
-- **PDF export** — native print → "Save as PDF" with A4 layout and a repeating md2web header;
+- **PDF export** — native print → "Save as PDF" with A4 layout and clean margins (no header or footer);
   or headless from the CLI with `--pdf`. Text ending near the bottom of a page never spills
-  onto an extra header-only page.
+  onto an extra blank page.
 - **Page breaks** - a line holding only `\pagebreak`, `\newpage` or `<!-- pagebreak -->` starts
   a new printed page (see [Page breaks](#page-breaks)).
 
@@ -152,7 +152,7 @@ exit); the launcher test runs `md2web-open` against a fake `google-chrome` on `P
 that one watcher is started per file and reused on reopen. The browser suite's second test
 opens a watched page over `file://` and verifies the reload, the scroll restore and the
 unsaved-edits toast. Print tests count `Page.printToPDF` pages: forced and idle page breaks,
-and a spacer sweep that fails if a trailing rule or bottom margin adds a header-only page.
+and a spacer sweep that fails if a trailing rule or bottom margin adds a blank page.
 
 ## License
 
