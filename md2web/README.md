@@ -31,7 +31,10 @@ any `.md` into a **single self-contained `.html`** or an **A4 PDF** from the com
   on every save and the open window refreshes itself, keeping your scroll position. Unsaved
   in-page edits are never overwritten: a toast offers *Reload* instead.
 - **PDF export** — native print → "Save as PDF" with A4 layout and a repeating md2web header;
-  or headless from the CLI with `--pdf`.
+  or headless from the CLI with `--pdf`. Text ending near the bottom of a page never spills
+  onto an extra header-only page.
+- **Page breaks** - a line holding only `\pagebreak`, `\newpage` or `<!-- pagebreak -->` starts
+  a new printed page (see [Page breaks](#page-breaks)).
 
 ## Usage
 
@@ -72,6 +75,24 @@ author: Jane Doe
 ```
 
 One `key: value` per line, quotes stripped. Lists and nested objects are not supported.
+
+## Page breaks
+
+Put one of these on a line of its own (case-insensitive, up to 3 leading spaces) to force the
+content after it onto a new PDF page:
+
+```markdown
+\pagebreak
+\newpage
+<!-- pagebreak -->
+```
+
+The comment form stays invisible on GitHub and other Markdown viewers. On screen md2web draws a
+dashed "Page break" rule; in print it is a zero-height forced break. Markers inside code blocks
+stay literal. A break that could only produce an empty page is ignored in print (drawn faded on
+screen): one at the end of the document (a trailing `---` is dropped from print too), one
+directly followed by another break, and one before any content when there is no front-matter
+title. A break right after a front-matter title makes a cover page.
 
 ## Project layout
 
@@ -130,7 +151,8 @@ Watch tests drive `--watch` as a child process (rebuild on save, sidecar version
 exit); the launcher test runs `md2web-open` against a fake `google-chrome` on `PATH` and checks
 that one watcher is started per file and reused on reopen. The browser suite's second test
 opens a watched page over `file://` and verifies the reload, the scroll restore and the
-unsaved-edits toast.
+unsaved-edits toast. Print tests count `Page.printToPDF` pages: forced and idle page breaks,
+and a spacer sweep that fails if a trailing rule or bottom margin adds a header-only page.
 
 ## License
 

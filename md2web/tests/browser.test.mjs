@@ -186,6 +186,45 @@ test('browser regressions', { timeout: 60000 }, async t => {
       assert.equal(Buffer.from(data, 'base64').subarray(0, 5).toString(), '%PDF-');
       assert.match(await evaluate(`document.querySelector('#article-body').textContent`), /Native print smoke test/);
     });
+    const printedPages = async () => {
+      const { data } = await call('Page.printToPDF', { preferCSSPageSize: true, printBackground: true });
+      return (Buffer.from(data, 'base64').toString('latin1').match(/\/Type\s*\/Page(?![a-z])/g) || []).length;
+    };
+    await t.test('page break markers force printed pages; code fences keep them literal', async () => {
+      await edit('## One\n\nAlpha.\n\\newpage\n## Two\n\n<!-- pagebreak -->\n\n```\n\\pagebreak\n```\n\n  \\PageBreak  \n\nEnd.');
+      assert.deepEqual(await evaluate(`({
+        breaks: document.documentElement.dataset.md2webPagebreaks,
+        markers: document.querySelectorAll('#article-body > .md-pagebreak').length,
+        code: document.querySelector('#article-body pre code').textContent.trim(),
+        lines: [...document.querySelectorAll('#article-body [data-line]')].map(h => Number(h.dataset.line)),
+      })`), { breaks: '3', markers: 3, code: '\\pagebreak', lines: [0, 4] });
+      assert.equal(await printedPages(), 4);
+    });
+    await t.test('breaks that would print an empty page are idle', async () => {
+      // Leading (no front matter), doubled and trailing breaks, plus a trailing rule
+      await edit('\\pagebreak\n\n\\pagebreak\n\nFirst.\n\n\\pagebreak\n\n\\pagebreak\n\nSecond.\n\n\\pagebreak\n\n---\n\n<!-- pagebreak -->\n');
+      assert.deepEqual(await evaluate(`({
+        breaks: document.documentElement.dataset.md2webPagebreaks,
+        idle: document.querySelectorAll('.md-pagebreak--idle').length,
+        rule: document.querySelector('.md-hr').classList.contains('md-hr--trailing'),
+      })`), { breaks: '1', idle: 5, rule: true });
+      assert.equal(await printedPages(), 2);
+      // With front matter the title block is content, so a leading break makes a cover page
+      await edit('---\ntitle: Cover\n---\n\n\\pagebreak\n\nBody.');
+      assert.equal(await evaluate('document.documentElement.dataset.md2webPagebreaks'), '1');
+      assert.equal(await printedPages(), 2);
+    });
+    await t.test('text ending near the bottom of a page never adds a header-only page', async () => {
+      // A spacer pushes the last line across the page bottom; a trailing rule or a bottom
+      // margin used to spill onto a new page that held only the running header.
+      const spacer = h => 'Start.\n\n<img height="' + h + '" width="8" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">\n\nEnd.';
+      for (let h = 700; h <= 1000; h += 6) {
+        await edit(spacer(h));
+        const plain = await printedPages();
+        await edit(spacer(h) + '\n\n---\n');
+        assert.equal(await printedPages(), plain, 'trailing rule added a page at spacer ' + h);
+      }
+    });
     await t.test('the Contents panel can be hidden and the choice survives a reload', async () => {
       await edit('## One\n\n## Two\n\n## Three');
       assert.equal(await evaluate('document.documentElement.dataset.md2webSidebar'), 'on');

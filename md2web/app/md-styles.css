@@ -913,6 +913,29 @@ body {
   border-radius: 2px;
 }
 
+/* ── Page break (\pagebreak, \newpage, <!-- pagebreak -->) ────────────────────
+   Screen: a labelled dashed rule so the author sees where the PDF will break.
+   Print: zero-height forced break (see PRINT). An idle break (one that would only
+   produce an empty page) is drawn fainter and ignored when printing. */
+.md-pagebreak {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-8) 0;
+  color: var(--page-fg-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+.md-pagebreak::before,
+.md-pagebreak::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed var(--page-border-2);
+}
+.md-pagebreak--idle { opacity: 0.45; }
+
 /* ── Links ────────────────────────────────────────────────────────────────── */
 .article__body a {
   color: var(--accent-fg);
@@ -1334,6 +1357,26 @@ body {
     margin: 10pt 0;
   }
   .md-figure img { box-shadow: none; border: 1px solid var(--page-border-1); }
+
+  /* ── PAGE BREAKS ── */
+  .md-pagebreak {
+    display: block;
+    height: 0;
+    margin: 0 !important;
+    overflow: hidden;
+    visibility: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+  .md-pagebreak + * { margin-top: 0 !important; }
+
+  /* Nothing may spill past the last printed block: its bottom margin (or a
+     trailing rule / idle break) would otherwise open a page holding only the
+     running header when the text ends near the bottom of a page. */
+  .md-pagebreak--idle,
+  .md-hr--trailing { display: none !important; }
+  .md-block--last,
+  .md-block--last :last-child { margin-bottom: 0 !important; }
 
   /* ── LINKS — keep brand color but no rendered URL clutter ── */
   .article__body a {

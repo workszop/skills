@@ -52,6 +52,10 @@
   const HL_CACHE_MAX       = 400;  // highlighted code blocks kept across re-renders
   const TALL_CODE_LINES    = 30;   // code blocks longer than this may break across printed pages
   const TALL_TABLE_ROWS    = 20;   // same for tables
+  // Forced page break: a line holding only \pagebreak, \newpage or <!-- pagebreak -->
+  // (up to 3 leading spaces, like any Markdown block). Invisible on GitHub for the comment form.
+  const PAGEBREAK_RE       = /^ {0,3}(?:\\pagebreak|\\newpage|<!--[ \t]*pagebreak[ \t]*-->)[ \t]*(?:\n+|$)/i;
+  const PAGEBREAK_START_RE = /(^|\n) {0,3}(?:\\pagebreak|\\newpage|<!--[ \t]*pagebreak[ \t]*-->)[ \t]*(?=\n|$)/i;
   const TOAST_MS           = 5000;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -124,6 +128,23 @@
   // `this.parser.parseInline()` / `.parse()` to render child tokens to HTML.
   marked.use({
     gfm: true,
+    extensions: [{
+      name: 'pagebreak',
+      level: 'block',
+      // Lets the marker end a paragraph even without a blank line before it
+      start(src) {
+        const m = PAGEBREAK_START_RE.exec(src);
+        return m ? m.index + m[1].length : undefined;
+      },
+      tokenizer(src) {
+        const m = PAGEBREAK_RE.exec(src);
+        if (m) return { type: 'pagebreak', raw: m[0] };
+      },
+      // On screen a labelled dashed rule; in print a forced break (md-styles.css)
+      renderer() {
+        return '<div class="md-pagebreak" role="separator" aria-label="Page break"><span>Page break</span></div>\n';
+      },
+    }],
     renderer: {
       heading({ text, depth, tokens, line }) {
         const slug = slugify(text);
@@ -434,6 +455,7 @@
       cb.replaceWith(icon);
     });
 
+    markIdlePageBreaks();
     buildToC();
     updateSidebar();
 
@@ -445,6 +467,29 @@
       (dateStr ? '<span class="topbar__date type-mono" title="Last changed">' + escapeHtml(dateStr) + '</span>' : '');
     printTitle.textContent = fm.title || (doc.name || '').replace(MD_FILE_RE, '');
     return true;
+  }
+
+  // A forced break with nothing printable after it (end of document, only rules left, or
+  // another break next) or before it (first block, no front-matter header) would print a
+  // page holding just the running header. Such breaks stay visible on screen but are
+  // idle in print; a trailing rule is dropped from print for the same reason.
+  function markIdlePageBreaks() {
+    const blocks = Array.from(articleBody.children);
+    const isBreak = el => el.classList.contains('md-pagebreak');
+    const isRule  = el => el.classList.contains('md-hr');
+    let tail = true;
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const el = blocks[i];
+      const next = blocks[i + 1];
+      if (isBreak(el)) el.classList.toggle('md-pagebreak--idle', tail || (next && isBreak(next)));
+      else if (isRule(el) && tail) el.classList.add('md-hr--trailing');
+      else if (tail) { el.classList.add('md-block--last'); tail = false; }
+    }
+    for (let i = 0; !articleHeader.firstChild && i < blocks.length && isBreak(blocks[i]); i++) {
+      blocks[i].classList.add('md-pagebreak--idle');
+    }
+    const active = articleBody.querySelectorAll('.md-pagebreak:not(.md-pagebreak--idle)').length;
+    document.documentElement.setAttribute('data-md2web-pagebreaks', String(active));
   }
 
   function showEmpty() {

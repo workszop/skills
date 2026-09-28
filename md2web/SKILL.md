@@ -81,6 +81,14 @@ author: Jane Doe
 One `key: value` per line; no lists or nesting. Without front matter the file name is used.
 The table of contents appears automatically when there are 3+ `h2`/`h3` headings.
 
+## Page breaks
+
+A line holding only `\pagebreak`, `\newpage` or `<!-- pagebreak -->` forces a new PDF page
+(a dashed "Page break" rule on screen; literal inside code blocks). Breaks that would only
+print an empty page (at the end, doubled, or before any content without a front-matter title)
+are ignored in print, and a trailing `---` is not printed. A break right after the front-matter
+title gives a cover page. The page reports active breaks as `data-md2web-pagebreaks="<n>"`.
+
 ## Workflow for the agent
 
 1. Run `build.mjs` with the user's file. Put the output next to the source unless told otherwise.
@@ -91,7 +99,8 @@ The table of contents appears automatically when there are 3+ `h2`/`h3` headings
    to eyeball the layout. The PDF has a repeating "md2web · title" header on every page; code
    blocks of 30+ lines and tables of 20+ rows are allowed to break across pages.
    The rendered page exposes a DOM contract on `<html>`: `data-md2web-ready="true"`,
-   `data-md2web-docs="<n>"`, `data-md2web-editor="on|off"`, `data-md2web-sidebar="on|off"` plus
+   `data-md2web-docs="<n>"`, `data-md2web-editor="on|off"`, `data-md2web-sidebar="on|off"`,
+   `data-md2web-pagebreaks="<n>"` plus
    the `data-md-*` format attributes.
 4. Report both paths as full links.
 
