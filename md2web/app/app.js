@@ -1320,9 +1320,31 @@
     } catch (e) { /* private mode */ }
   }
 
+  // ── Start + reveal ─────────────────────────────────────────────────────────
+  // index.html hides the page until data-md2web-shown is set (boot gate), so the
+  // empty chrome and fallback fonts never flash. Reveal once the fonts are in,
+  // capped at FONT_WAIT_MS, and on every init path (even if init throws).
+  const FONT_WAIT_MS = 1500;
+  const UI_FONTS = ['400 1em Raleway', '700 1em Raleway', '400 1em Inter', '600 1em Inter', '400 1em "Geist Mono"'];
+
+  function reveal() {
+    document.documentElement.setAttribute('data-md2web-shown', 'true');
+  }
+
+  function start() {
+    try {
+      init();
+    } finally {
+      const fonts = document.fonts
+        ? Promise.all(UI_FONTS.map(f => document.fonts.load(f).catch(() => null)))
+        : Promise.resolve();
+      Promise.race([fonts, new Promise(r => setTimeout(r, FONT_WAIT_MS))]).then(reveal);
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    init();
+    start();
   }
 })();
