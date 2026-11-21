@@ -156,11 +156,9 @@ export function buildHtml(mdPath, defaults = {}, { warn = msg => console.error('
   const appJs  = readFileSync(join(APP_DIR, 'app.js'), 'utf8');
   const vendor = name => readFileSync(join(APP_DIR, 'vendor', name), 'utf8');
 
-  // @import must be the first rule in a stylesheet, so keep tokens.css first
-  // and hoist its @import above everything else in the inlined <style>.
-  const IMPORT_RE = /^@import\s+url\([^)]*\)[^;\n]*;/gm;
-  const imports = tokens.match(IMPORT_RE) || [];
-  const css = imports.join('\n') + '\n' + tokens.replace(IMPORT_RE, '') + '\n' + styles;
+  // Fonts come from a <link> in index.html, so the CSS is just tokens + styles.
+  if (/^@import\s/m.test(tokens + styles)) throw new Error('build: @import in app CSS - load fonts with a <link> in app/index.html instead');
+  const css = tokens + '\n' + styles;
 
   const config = {
     name,

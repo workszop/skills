@@ -7,8 +7,9 @@
 
 /* ---- WEB FONTS ----------------------------------------------------------- */
 /* Raleway: wordmark + default article font. Inter: UI chrome.
-   Geist Mono: code and metadata. All from Google Fonts. */
-@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
+   Geist Mono: code and metadata. Loaded from Google Fonts by a <link> in
+   index.html (parallel with this file); an @import here would chain the
+   requests and block rendering. */
 
 :root {
   /* ====================================================================== */

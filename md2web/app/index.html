@@ -4,10 +4,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>md2web</title>
+  <!-- Boot gate: the page stays hidden until app.js has rendered and the fonts are in,
+       so the empty chrome and fallback fonts are never painted. Failsafe reveal after 4 s;
+       printing (PDF export) always shows the page. -->
+  <style>
+    @keyframes md2web-reveal { to { visibility: visible; } }
+    html:not([data-md2web-shown]) body { visibility: hidden; animation: md2web-reveal 0s 4s forwards; }
+    @media print { html:not([data-md2web-shown]) body { visibility: visible; animation: none; } }
+  </style>
   <link rel="stylesheet" href="tokens.css" />
   <link rel="stylesheet" href="md-styles.css" />
-  <!-- Panel font options (Poppins / Lato); Raleway, Inter and Geist Mono come from tokens.css -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@400;500;700&display=swap" />
+  <!-- Fonts: Raleway, Inter, Geist Mono (tokens) + Poppins / Lato (Format panel options).
+       A <link>, not an @import in tokens.css, so the request runs in parallel. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Lato:wght@400;700&family=Poppins:wght@400;500;700&display=swap" />
   <!-- No highlight.js theme stylesheet: every .hljs-* token is styled in md-styles.css
        from design tokens, so code blocks follow the accent/theme and need no extra request. -->
 

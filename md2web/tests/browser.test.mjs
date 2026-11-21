@@ -271,6 +271,20 @@ test('browser regressions', { timeout: 60000 }, async t => {
       const landed = await evaluate(`document.getElementById('target').getBoundingClientRect().top - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h'))`);
       assert.ok(landed >= 0 && landed < 60, 'Target landed at ' + landed);
     });
+    await t.test('wide content wraps inside the column on screen and in print', async () => {
+      const long = 'x'.repeat(240);
+      await edit(`# Wide\n\nhttps://example.com/${long} and \`${long}\`\n\n\`\`\`bash\ncurl ${long} --flag ${long}\n\`\`\`\n\n    indented ${long}\n\n| A | B | C | D | E | F |\n|---|---|---|---|---|---|\n| ${long} | https://example.com/${long} | c | d | e | \`${long}\` |\n\n<pre>raw ${long}</pre>\n`);
+      const overflow = `(() => {
+        const body = document.querySelector('#article-body');
+        const right = body.getBoundingClientRect().right + 1;
+        return [...body.querySelectorAll('*')].filter(el => el.getBoundingClientRect().right > right).map(el => el.tagName + '.' + el.className);
+      })()`;
+      assert.deepEqual(await evaluate(overflow), []);
+      await call('Emulation.setEmulatedMedia', { media: 'print' });
+      await frames();
+      try { assert.deepEqual(await evaluate(overflow), []); }
+      finally { await call('Emulation.setEmulatedMedia', { media: '' }); }
+    });
     await t.test('original Markdown formatting and mobile layout still work', async () => {
       await edit('## Ćwiczenia\n\n## Ćwiczenia\n\n## Third\n\n- [x] Done\n\n```js\nconst x = 1;\n```');
       assert.deepEqual(await evaluate(`[...document.querySelectorAll('#article-body h2')].map(h=>h.id)`), ['ćwiczenia', 'ćwiczenia-2', 'third']);
